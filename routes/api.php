@@ -19,19 +19,15 @@ use App\Http\Controllers\ResepController;
 |
 */
 
-// Authentication
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/register/pasien', [AuthController::class, 'registerPasien']);
 Route::post('/auth/register/dokter', [AuthController::class, 'registerDokter']);
-// Public Change Password by Email (guarded by env)
 Route::post('/auth/change-password-public', [AuthController::class, 'changePasswordPublicByEmail']);
 
-// Public routes
 Route::get('/janji/ketersediaan', [JanjiTemuController::class, 'getKetersediaan']);
 
 Route::get('/status', [StatusController::class, 'index']);
 
-// Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [UserController::class, 'getUserProfile']);
 
@@ -40,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::post('/janji', [JanjiTemuController::class, 'buatJanjiTemu']);
+
 
     // Janji Temu CRUD Routes
     Route::get('/janji', [JanjiTemuController::class, 'listJanjiTemu']);
@@ -51,8 +48,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Logout route
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-
-    // (Dihapus) Endpoint change-password dan change-password-by-email dipangkas, gunakan /auth/change-password-public jika diperlukan untuk dev/demo.
 });
 // Resep Routes
 Route::apiResource('resep', ResepController::class);
