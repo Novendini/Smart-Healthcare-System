@@ -35,13 +35,12 @@ Route::get('/status', [StatusController::class, 'index']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [UserController::class, 'getUserProfile']);
 
-<<<<<<< HEAD
+
     Route::post('/janji/booking-cepat', [JanjiTemuController::class, 'bookingCepat']);
 
-=======
+
     Route::post('/janji', [JanjiTemuController::class, 'buatJanjiTemu']);
-    
->>>>>>> 7fb15dbffb41b37ddd499211d0dfa0a03a8667e0
+
     // Janji Temu CRUD Routes
     Route::get('/janji', [JanjiTemuController::class, 'listJanjiTemu']);
     Route::get('/janji/statistik', [JanjiTemuController::class, 'getStatistikJanjiTemu']);
@@ -49,11 +48,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/janji/{id}', [JanjiTemuController::class, 'getDetailJanjiTemu']);
     Route::put('/janji/{id}', [JanjiTemuController::class, 'ubahJanjiTemu']);
     Route::delete('/janji/{id}', [JanjiTemuController::class, 'hapusJanjiTemu']);
-    
+
     // Logout route
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
     // (Dihapus) Endpoint change-password dan change-password-by-email dipangkas, gunakan /auth/change-password-public jika diperlukan untuk dev/demo.
 });
-    // Resep Routes
-    Route::apiResource('resep', ResepController::class);
+// Resep Routes
+Route::apiResource('resep', ResepController::class);
