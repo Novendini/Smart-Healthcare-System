@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Dokter;
 use App\Models\JanjiTemu;
 use App\Models\Pasien;
+use App\Models\RekamMedis;
 use App\Models\Pengguna;
 use App\Repositories\JanjiTemuRepository;
 use Carbon\Carbon;
@@ -141,6 +142,19 @@ class JanjiTemuService
             }
         }
 
+        // Tidak boleh booking waktu yang sudah lewat pada hari yang sama
+        try {
+            $tanggalJanji = Carbon::parse($data['tanggal']);
+            if ($tanggalJanji->isToday()) {
+                $startDateTime = Carbon::parse($data['tanggal'].' '.$data['waktu_mulai']);
+                if ($startDateTime->lessThan(Carbon::now())) {
+                    throw new \Exception('Waktu janji temu sudah terlewat');
+                }
+            }
+        } catch (\Throwable $e) {
+            // Jika parsing gagal, biarkan validator menangani format
+        }
+
         $waktuMulaiBaru = $data['waktu_mulai'];
         $waktuSelesaiBaru = Carbon::parse($waktuMulaiBaru)->addHour()->format('H:i:s');
 
@@ -171,9 +185,21 @@ class JanjiTemuService
     /**
      * Mendapatkan semua janji temu
      */
-    public function getAllJanjiTemu()
+    public function getAllJanjiTemu($sort = null)
     {
-        return $this->janjiTemuRepository->getAllWithRelations();
+        $order = null;
+        if ($sort) {
+            $sort = strtolower($sort);
+            $order = in_array($sort, ['asc','desc']) ? $sort : ($sort === 'terlama' ? 'asc' : ($sort === 'terbaru' ? 'desc' : null));
+        }
+
+        $items = $order
+            ? $this->janjiTemuRepository->getAllWithRelationsSorted($order)
+            : $this->janjiTemuRepository->getAllWithRelations();
+        foreach ($items as $item) {
+            $this->autoCancelIfPast($item);
+        }
+        return $items;
     }
 
     /**
@@ -181,34 +207,126 @@ class JanjiTemuService
      */
     public function getJanjiTemuById($id)
     {
-        return $this->janjiTemuRepository->findWithRelations($id);
+        $janjiTemu = $this->janjiTemuRepository->findWithRelations($id);
+        if ($janjiTemu) {
+            $this->autoCancelIfPast($janjiTemu);
+        }
+        return $janjiTemu;
     }
 
     /**
      * Mendapatkan janji temu berdasarkan pasien
      */
-    public function getJanjiTemuByPasien($idPasien, $status = null)
+    public function getJanjiTemuByPasien($idPasien, $status = null, $sort = null)
     {
-        return $this->janjiTemuRepository->getByPasien($idPasien, $status);
+        $order = null;
+        if ($sort) {
+            $sort = strtolower($sort);
+            $order = in_array($sort, ['asc','desc']) ? $sort : ($sort === 'terlama' ? 'asc' : ($sort === 'terbaru' ? 'desc' : null));
+        }
+
+        $items = $order
+            ? $this->janjiTemuRepository->getByPasienSorted($idPasien, $status, $order)
+            : $this->janjiTemuRepository->getByPasien($idPasien, $status);
+        foreach ($items as $item) {
+            $this->autoCancelIfPast($item);
+        }
+        return $items;
     }
 
     /**
-     * Search janji temu berdasarkan tanggal dan nama dokter
+     * Mendapatkan janji temu berdasarkan dokter
      */
-    public function searchJanjiTemu($tanggal = null, $namaDokter = null, $user = null)
+    public function getJanjiTemuByDokter($idDokter, $status = null, $sort = null)
+    {
+        $order = null;
+        if ($sort) {
+            $sort = strtolower($sort);
+            $order = in_array($sort, ['asc','desc']) ? $sort : ($sort === 'terlama' ? 'asc' : ($sort === 'terbaru' ? 'desc' : null));
+        }
+
+        $items = $order
+            ? $this->janjiTemuRepository->getByDokterSorted($idDokter, $status, $order)
+            : $this->janjiTemuRepository->getByDokter($idDokter, $status);
+        foreach ($items as $item) {
+            $this->autoCancelIfPast($item);
+        }
+        return $items;
+    }
+
+    /**
+     * Search janji temu berdasarkan tanggal dan nama.
+     * Dokter dapat memfilter dengan nama_dokter; Pasien dengan nama_pasien; Admin keduanya.
+     */
+    public function searchJanjiTemu($tanggal = null, $namaDokter = null, $namaPasien = null, $user = null)
     {
         $idPasien = null;
-        
-        // Jika user adalah pasien, batasi hanya janji temu miliknya
-        if ($user && $user->role === 'pasien') {
+        $idDokter = null;
+
+        if ($user) {
+            if ($user->role === 'pasien') {
+                $pasien = Pasien::where('id_pengguna', $user->id_pengguna)->first();
+                if (!$pasien) {
+                    throw new \Exception('Data pasien tidak ditemukan');
+                }
+                $idPasien = $pasien->id_pasien;
+                // Pasien: boleh memfilter nama_dokter maupun nama_pasien; hasil tetap dalam scope id_pasien
+            } elseif ($user->role === 'dokter') {
+                $dokter = Dokter::where('id_pengguna', $user->id_pengguna)->first();
+                if (!$dokter) {
+                    throw new \Exception('Data dokter tidak ditemukan');
+                }
+                $idDokter = $dokter->id_dokter;
+                // Dokter: boleh memfilter nama_pasien maupun nama_dokter; hasil tetap dalam scope id_dokter
+            }
+            // Admin: tidak ada pembatasan khusus
+        }
+
+        $items = $this->janjiTemuRepository->searchWithFilters($tanggal, $namaDokter, $idPasien, $idDokter, $namaPasien);
+        foreach ($items as $item) {
+            $this->autoCancelIfPast($item);
+        }
+        return $items;
+    }
+
+    /**
+     * Statistik janji temu: total dan aktif sesuai role pengguna
+     * Definisi aktif: status 'terjadwal'
+     */
+    public function getJanjiStats(Pengguna $user): array
+    {
+        if ($user->role === 'pasien') {
             $pasien = Pasien::where('id_pengguna', $user->id_pengguna)->first();
             if (!$pasien) {
                 throw new \Exception('Data pasien tidak ditemukan');
             }
-            $idPasien = $pasien->id_pasien;
+            return [
+                'total' => $this->janjiTemuRepository->countByPasien($pasien->id_pasien),
+                'aktif' => $this->janjiTemuRepository->countActiveByPasien($pasien->id_pasien),
+                'selesai' => $this->janjiTemuRepository->countByPasienStatus($pasien->id_pasien, 'selesai'),
+                'dibatalkan' => $this->janjiTemuRepository->countByPasienStatus($pasien->id_pasien, 'dibatalkan'),
+            ];
         }
-        
-        return $this->janjiTemuRepository->searchWithFilters($tanggal, $namaDokter, $idPasien);
+
+        if ($user->role === 'dokter') {
+            $dokter = Dokter::where('id_pengguna', $user->id_pengguna)->first();
+            if (!$dokter) {
+                throw new \Exception('Data dokter tidak ditemukan');
+            }
+            return [
+                'total' => $this->janjiTemuRepository->countByDokter($dokter->id_dokter),
+                'aktif' => $this->janjiTemuRepository->countActiveByDokter($dokter->id_dokter),
+                'selesai' => $this->janjiTemuRepository->countByDokterStatus($dokter->id_dokter, 'selesai'),
+                'dibatalkan' => $this->janjiTemuRepository->countByDokterStatus($dokter->id_dokter, 'dibatalkan'),
+            ];
+        }
+
+        return [
+            'total' => $this->janjiTemuRepository->countAll(),
+            'aktif' => $this->janjiTemuRepository->countActive(),
+            'selesai' => $this->janjiTemuRepository->countByStatus('selesai'),
+            'dibatalkan' => $this->janjiTemuRepository->countByStatus('dibatalkan'),
+        ];
     }
 
     /**
@@ -237,9 +355,36 @@ class JanjiTemuService
             if (!$pasien || $janjiTemu->id_pasien !== $pasien->id_pasien) {
                 throw new AuthorizationException('Anda tidak memiliki akses ke janji temu ini');
             }
-            // Pasien hanya boleh update ke 'dibatalkan'
-            if (isset($data['status']) && $data['status'] !== 'dibatalkan') {
-                throw new AuthorizationException('Pasien hanya dapat membatalkan janji temu');
+            // Pasien tidak bisa edit jika janji sudah dibatalkan/selesai
+            if (in_array($janjiTemu->status, ['dibatalkan', 'selesai'])) {
+                throw new AuthorizationException('Janji temu ini tidak dapat diubah karena sudah dibatalkan atau selesai');
+            }
+            // Batasi field yang boleh diubah oleh pasien
+            $allowedKeys = ['keluhan', 'tanggal_janji', 'waktu_mulai', 'id_dokter'];
+            $unknownKeys = array_diff(array_keys($data), $allowedKeys);
+            if (!empty($unknownKeys)) {
+                throw new AuthorizationException('Pasien hanya dapat mengubah keluhan, tanggal, waktu, atau dokter');
+            }
+            // Pasien tidak boleh mengubah status
+            if (isset($data['status'])) {
+                throw new AuthorizationException('Pasien tidak dapat mengubah status janji temu');
+            }
+            // Tidak boleh memundurkan ke waktu/tanggal yang sudah lewat
+            if (isset($data['tanggal_janji']) || isset($data['waktu_mulai'])) {
+                $tanggalTarget = $data['tanggal_janji'] ?? $janjiTemu->tanggal_janji;
+                $waktuTarget = $data['waktu_mulai'] ?? $janjiTemu->waktu_mulai;
+                try {
+                    $tanggal = Carbon::parse($tanggalTarget);
+                    $targetDateTime = Carbon::parse($tanggalTarget.' '.$waktuTarget);
+                    if ($tanggal->isBefore(Carbon::today())) {
+                        throw new \Exception('Waktu janji temu sudah terlewat');
+                    }
+                    if ($tanggal->isToday() && $targetDateTime->lessThan(Carbon::now())) {
+                        throw new \Exception('Waktu janji temu sudah terlewat');
+                    }
+                } catch (\Throwable $e) {
+                    // Biarkan validator menangani format tanggal/waktu jika parsing gagal
+                }
             }
         }
 
@@ -248,9 +393,44 @@ class JanjiTemuService
             if (!$dokter || $janjiTemu->id_dokter !== $dokter->id_dokter) {
                 throw new AuthorizationException('Anda hanya dapat mengakses janji temu milik Anda');
             }
-            // Dokter hanya boleh update ke 'selesai'
+            // Dokter boleh: 1) menandai selesai, atau 2) meng-assign ke dokter lain (ubah id_dokter)
+            // Batasi agar dokter tidak mengubah field lain selain 'status' dan 'id_dokter'
+            $allowedKeys = ['id_dokter', 'status'];
+            $unknownKeys = array_diff(array_keys($data), $allowedKeys);
+            if (!empty($unknownKeys)) {
+                throw new AuthorizationException('Dokter hanya dapat mengubah dokter penanggung jawab atau menandai selesai');
+            }
+            // Jika mengubah status, dokter hanya boleh ke 'selesai'
             if (isset($data['status']) && $data['status'] !== 'selesai') {
                 throw new AuthorizationException('Dokter hanya dapat menandai janji temu sebagai selesai');
+            }
+            // Dokter hanya dapat menyelesaikan/assign bila janji masih terjadwal
+            if (($data['status'] ?? null) && $janjiTemu->status !== 'terjadwal') {
+                throw new AuthorizationException('Hanya dapat mengubah janji yang masih terjadwal');
+            }
+            if (isset($data['id_dokter']) && $janjiTemu->status !== 'terjadwal') {
+                throw new AuthorizationException('Hanya dapat mengubah janji yang masih terjadwal');
+            }
+            // Jika dokter menandai selesai, pastikan rekam medis untuk janji temu ini sudah ada
+            if (isset($data['status']) && $data['status'] === 'selesai') {
+                $rekamMedis = RekamMedis::where('id_janji_temu', $id)->first();
+                if (!$rekamMedis) {
+                    throw new \Exception('rekam medis belum tersedia untuk janji temu ini');
+                }
+                // Pastikan konsistensi data rekam medis dengan janji temu
+                if (($rekamMedis->id_dokter ?? null) !== $janjiTemu->id_dokter || ($rekamMedis->id_pasien ?? null) !== $janjiTemu->id_pasien) {
+                    throw new \Exception('rekam medis tidak sesuai dengan janji temu ini');
+                }
+            }
+            // Jika dokter melakukan assign ke dokter lain (ubah id_dokter), validasi akan diproses di bawah:
+            // - Validasi shift dokter tujuan terhadap waktu_mulai saat ini
+            // - Validasi bentrok jadwal (overlap) dengan janji dokter tujuan
+            if (isset($data['id_dokter'])) {
+                $dokterBaru = Dokter::find($data['id_dokter']);
+                $dokterLama = Dokter::find($janjiTemu->id_dokter);
+                if ($dokterBaru && $dokterLama && ($dokterBaru->shift !== $dokterLama->shift)) {
+                    throw new \Exception('Dokter tujuan harus memiliki shift yang sama');
+                }
             }
         }
 
@@ -315,11 +495,24 @@ class JanjiTemuService
             }
         }
 
+        // Dokter tidak diperbolehkan menghapus via endpoint ini
+        if ($user->role === 'dokter') {
+            throw new AuthorizationException('Hanya pasien atau admin yang dapat membatalkan janji temu');
+        }
+
         if ($janjiTemu->status === 'selesai') {
             throw new \Exception('Janji temu yang sudah selesai tidak dapat dihapus');
         }
 
-        return $this->janjiTemuRepository->delete($id);
+        // Jika sudah dibatalkan sebelumnya, kembalikan sinyal agar controller merespons idempoten
+        if ($janjiTemu->status === 'dibatalkan') {
+            throw new \Exception('Janji temu sudah dibatalkan');
+        }
+
+        // Alihkan delete menjadi pembatalan status agar dokter/pasien melihat status dibatalkan
+        return $this->janjiTemuRepository->update($id, [
+            'status' => 'dibatalkan',
+        ]);
     }
 
     /**
@@ -333,5 +526,26 @@ class JanjiTemuService
         $endB = Carbon::parse($endB);
 
         return ($startA < $endB) && ($endA > $startB);
+    }
+
+    /**
+     * Auto-cancel janji temu: jika status terjadwal dan harinya sudah lewat, ubah ke dibatalkan.
+     * Tidak mengubah jika status sudah selesai.
+     */
+    private function autoCancelIfPast(JanjiTemu $janjiTemu)
+    {
+        try {
+            if (!$janjiTemu) return;
+            if ($janjiTemu->status === 'selesai') return;
+            if ($janjiTemu->status !== 'terjadwal') return;
+
+            $tanggal = Carbon::parse($janjiTemu->tanggal_janji);
+            if ($tanggal->isBefore(Carbon::today())) {
+                $janjiTemu->status = 'dibatalkan';
+                $janjiTemu->save();
+            }
+        } catch (\Throwable $e) {
+
+        }
     }
 }
