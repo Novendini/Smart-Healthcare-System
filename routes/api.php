@@ -6,6 +6,7 @@ use App\Http\Controllers\API\JanjiTemuController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\StatusController;
+use App\Http\Controllers\ResepController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,7 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [UserController::class, 'getUserProfile']);
 
     Route::post('/janji/booking-cepat', [JanjiTemuController::class, 'bookingCepat']);
-    
+
     // Janji Temu CRUD Routes
     Route::get('/janji', [JanjiTemuController::class, 'getAllJanjiTemu']);
     Route::get('/janji/search', [JanjiTemuController::class, 'searchJanjiTemu']);
@@ -41,3 +42,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/janji/{id}', [JanjiTemuController::class, 'updateJanjiTemu']);
     Route::delete('/janji/{id}', [JanjiTemuController::class, 'deleteJanjiTemu']);
 });
+    // Resep Routes
+    Route::apiResource('resep', ResepController::class);

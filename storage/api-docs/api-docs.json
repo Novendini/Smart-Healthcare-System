@@ -600,6 +600,159 @@
                     }
                 ]
             }
+        },
+        "/api/resep": {
+            "get": {
+                "tags": [
+                    "Resep"
+                ],
+                "summary": "Get all resep",
+                "description": "Ambil semua resep dengan filter opsional",
+                "operationId": "48f5c28dd791629c3c46ec3e13d08223",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Filter berdasarkan status resep",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "tanggal",
+                        "in": "query",
+                        "description": "Filter berdasarkan tanggal resep (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Resep"
+                ],
+                "summary": "Create new resep",
+                "operationId": "0ef6cc170ccdbca4247a490e0315267b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "id_rekam_medis": {
+                                        "type": "integer"
+                                    },
+                                    "tanggal_resep": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    }
+                }
+            }
+        },
+        "/api/resep/{id}": {
+            "get": {
+                "tags": [
+                    "Resep"
+                ],
+                "summary": "Get resep by ID",
+                "operationId": "86c60206d367638f94d7f0cf34caeba5",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Resep"
+                ],
+                "summary": "Update resep",
+                "operationId": "e7a2a34bb87e205caf9cccb75558b7ac",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Resep"
+                ],
+                "summary": "Delete resep",
+                "operationId": "c3640388324b552fbef696c01f70bba7",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deleted"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -883,6 +1036,10 @@
         }
     },
     "tags": [
+        {
+            "name": "Resep",
+            "description": "API untuk mengelola resep"
+        },
         {
             "name": "Authentication",
             "description": "Authentication"
