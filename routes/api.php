@@ -46,8 +46,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/janji/{id}', [JanjiTemuController::class, 'ubahJanjiTemu']);
     Route::delete('/janji/{id}', [JanjiTemuController::class, 'hapusJanjiTemu']);
 
+    // Resep Routes
+    Route::apiResource('resep', ResepController::class);
+
     // Logout route
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 });
-// Resep Routes
-Route::apiResource('resep', ResepController::class);
