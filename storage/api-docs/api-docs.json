@@ -1900,19 +1900,19 @@
                 ]
             }
         },
-        "/api/resep": {
+        "/resep": {
             "get": {
                 "tags": [
                     "Resep"
                 ],
                 "summary": "Get all resep",
-                "description": "Ambil semua resep dengan filter opsional",
-                "operationId": "48f5c28dd791629c3c46ec3e13d08223",
+                "description": "Mengambil semua data resep. Pasien hanya bisa melihat miliknya, Dokter bisa melihat semua.",
+                "operationId": "f8005b53803b2e38e0d1c008252c76ea",
                 "parameters": [
                     {
                         "name": "status",
                         "in": "query",
-                        "description": "Filter berdasarkan status resep",
+                        "description": "Filter berdasarkan status resep (menunggu, diserahkan, dibatalkan)",
                         "required": false,
                         "schema": {
                             "type": "string"
@@ -1921,7 +1921,7 @@
                     {
                         "name": "tanggal",
                         "in": "query",
-                        "description": "Filter berdasarkan tanggal resep (YYYY-MM-DD)",
+                        "description": "Filter berdasarkan tanggal resep (format: YYYY-MM-DD)",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -1932,30 +1932,82 @@
                 "responses": {
                     "200": {
                         "description": "Success"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
             },
             "post": {
                 "tags": [
                     "Resep"
                 ],
                 "summary": "Create new resep",
-                "operationId": "0ef6cc170ccdbca4247a490e0315267b",
+                "description": "Membuat resep baru beserta detail obatnya. Hanya dokter yang bisa.",
+                "operationId": "5917a4359291f075cee279f8aaaa0ec8",
                 "requestBody": {
                     "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
+                                "required": [
+                                    "id_rekam_medis",
+                                    "tanggal_resep",
+                                    "status",
+                                    "details"
+                                ],
                                 "properties": {
                                     "id_rekam_medis": {
-                                        "type": "integer"
+                                        "type": "integer",
+                                        "example": 1
                                     },
                                     "tanggal_resep": {
                                         "type": "string",
-                                        "format": "date"
+                                        "format": "date",
+                                        "example": "2025-11-12"
                                     },
                                     "status": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "enum": [
+                                            "menunggu",
+                                            "diserahkan",
+                                            "dibatalkan"
+                                        ],
+                                        "example": "menunggu"
+                                    },
+                                    "details": {
+                                        "type": "array",
+                                        "items": {
+                                            "required": [
+                                                "id_obat",
+                                                "jumlah",
+                                                "dosis"
+                                            ],
+                                            "properties": {
+                                                "id_obat": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "jumlah": {
+                                                    "type": "integer",
+                                                    "example": 10
+                                                },
+                                                "dosis": {
+                                                    "type": "string",
+                                                    "example": "3x1 sehari"
+                                                },
+                                                "instruksi": {
+                                                    "type": "string",
+                                                    "example": "Setelah makan"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
                                     }
                                 },
                                 "type": "object"
@@ -1966,17 +2018,31 @@
                 "responses": {
                     "201": {
                         "description": "Created"
+                    },
+                    "422": {
+                        "description": "Validation Error"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
             }
         },
-        "/api/resep/{id}": {
+        "/resep/{id}": {
             "get": {
                 "tags": [
                     "Resep"
                 ],
                 "summary": "Get resep by ID",
-                "operationId": "86c60206d367638f94d7f0cf34caeba5",
+                "operationId": "056021b290a46cf814ccff0f83095999",
                 "parameters": [
                     {
                         "name": "id",
@@ -1990,15 +2056,30 @@
                 "responses": {
                     "200": {
                         "description": "Success"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
             },
             "put": {
                 "tags": [
                     "Resep"
                 ],
-                "summary": "Update resep",
-                "operationId": "e7a2a34bb87e205caf9cccb75558b7ac",
+                "summary": "Update resep status only",
+                "description": "Hanya memperbarui status dari sebuah resep. Pasien tidak bisa, Dokter bisa semua.",
+                "operationId": "63f6e3bd0f6f96c6895e85b7d421a511",
                 "parameters": [
                     {
                         "name": "id",
@@ -2014,9 +2095,18 @@
                     "content": {
                         "application/json": {
                             "schema": {
+                                "required": [
+                                    "status"
+                                ],
                                 "properties": {
                                     "status": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "enum": [
+                                            "menunggu",
+                                            "diserahkan",
+                                            "dibatalkan"
+                                        ],
+                                        "example": "diserahkan"
                                     }
                                 },
                                 "type": "object"
@@ -2027,15 +2117,32 @@
                 "responses": {
                     "200": {
                         "description": "Updated"
+                    },
+                    "422": {
+                        "description": "Validation Error"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
             },
             "delete": {
                 "tags": [
                     "Resep"
                 ],
                 "summary": "Delete resep",
-                "operationId": "c3640388324b552fbef696c01f70bba7",
+                "operationId": "e79b5ef91bfde431f4fa68a923d6726f",
                 "parameters": [
                     {
                         "name": "id",
@@ -2049,8 +2156,22 @@
                 "responses": {
                     "200": {
                         "description": "Deleted"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
             }
         }
     },
